@@ -1,12 +1,13 @@
 import argparse
 import sys
+import os
 
 ###Start of main code
 ##Beginning with the main argument parser
 
 parser = argparse.ArgumentParser()
-parser.add_argument('reference', help = "The main fa/ fna file to be concatenated")
-parser.add_argument('-l', '--length', help = "The max length of each pseudocontig. Default is 1 Mbp")
+parser.add_argument('reference', help = "The main .fa/ .fna file to be concatenated")
+parser.add_argument('-l', '--length', help = "The max length of each pseudocontig. Default is 1 Mbp (1,000,000)")
 parser.add_argument('-v', '--verbose', help = "Print additional commentary", action = 'store_true')
 parser.add_argument('-n','--numbers', help = "Use only numbers for pseudocontig labels", action = 'store_true')
 
@@ -15,15 +16,16 @@ try:
 except SystemExit:
     print("No input recognised \nType 'python contig-concat.py -h' for help")
     sys.exit()
-else:
-    args = parser.parse_args()
+
+args = parser.parse_args()
 
 if args.length:                         #This sets either the user-defined or default length
-    if isinstance(args.length, int):
-        maxlength = int(args.length)        #Need to implement an error catch here
-    else:
+    try:
+        int(args.length)
+    except ValueError:
         print("ERROR: Cannot parse length '%s'. Please enter a valid integer\nType 'python contig-concat.py -h' for help" % str(args.length))
         sys.exit()
+    maxlength = int(args.length)
 else:
     maxlength = 1000000
 
@@ -34,6 +36,7 @@ else:
 
 if args.numbers:                #This argument lets you just print numbers as the header for the pseudocontigs
     ps_prefix = ""              #This sets the prefix for the pseudocontig labels in the output file
+    print("Suppressing pseudocontig labels")
 else:
     ps_prefix = "pseudo_contig_"
 
@@ -42,9 +45,9 @@ try:                            #Can the file be opened successfully?
 except IOError:
     print("Error: cannot open %s" % (str(args.reference)))
     sys.exit()
-else:
-    inFile = args.reference
-    file_root = inFile.split('.')[0]     #Prepare a file root for the output pseudocontig and bed files
+
+inFile = args.reference
+file_root = inFile.split('.')[0]     #Prepare a file root for the output pseudocontig and bed files
 
 ngap = "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
                 #ngap is the series of N's that will be used to separate contigs in the pseudocontigs
@@ -59,8 +62,8 @@ ps_number = 1
 
 print("Step 1/3: Reading in data from %s..." % (str(inFile)))
 
-total_length = 0                    #The total summed length of all contigs read in
-contig_count = 0                    #The count of all contigs read in
+total_length, contig_count = 0, 0   #total_length = The total summed length of all contigs read in
+                                    #contig_count = The count of all contigs read in
 contigs = {}                        #A dictionary that will store all of the individual contig sequences
 name = ""
 with open(inFile) as r:
@@ -84,14 +87,14 @@ if commenting:
 
 print("Step 2/3: Concatenating contigs & printing %s.concat.bed..." % (file_root))
 
-ps_label = ps_prefix + str(ps_number)   #This string will be used to index each pseudocontig
+ps_label = ps_prefix + str(ps_number)   #This string will be used to index each pseudocontig TODO: Implement join
 pseudocontigs = {}                      #This dictionary will contain the pseudocontigs
 pseudocontigs[ps_label] = ""
-current_length = 0
-bed_start = 1
-bed_end = 1
+current_length, bed_start, bed_end = 0, 1, 1
 bed_file = file_root + ".concat.bed"
-outFile = open(bed_file, 'wa')
+if os.path.exists(bed_file):
+    os.remove(bed_file)
+outFile = open(bed_file, 'a')
 if total_length < maxlength:
     for header in contigs.keys():
         pseudocontigs[ps_label] += contigs[header]
@@ -129,7 +132,9 @@ print("Bed file written")
 print("Step 3/3: Writing %s.concat.fa..." % (str(file_root)))
 
 pscontig_file = file_root + ".concat.fa"
-outFile = open(pscontig_file, 'wa')
+if os.path.exists(pscontig_file):
+    os.remove(pscontig_file)
+outFile = open(pscontig_file, 'a')
 for n in range(1, (ps_number+1)):           #Using range here to preserve pseudocontig order in output file
     ps_label = ps_prefix + str(n)
     if commenting:
